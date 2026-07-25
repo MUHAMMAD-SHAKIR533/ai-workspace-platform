@@ -1,0 +1,51 @@
+generator client { provider = "prisma-client-js" }
+datasource db { provider = "postgresql"; url = env("DATABASE_URL") }
+
+enum UserStatus { ACTIVE SUSPENDED INVITED }
+enum RoleName { ADMIN MANAGER EMPLOYEE CLIENT }
+enum ProjectStatus { PLANNING ACTIVE ON_HOLD COMPLETED ARCHIVED }
+enum TaskStatus { TODO IN_PROGRESS IN_REVIEW DONE }
+enum Priority { LOW MEDIUM HIGH URGENT }
+enum ClientStatus { ACTIVE INACTIVE PROSPECT }
+enum ChannelType { PUBLIC PRIVATE DIRECT }
+
+model User {
+  id String @id @default(uuid())
+  email String @unique
+  passwordHash String?
+  firstName String
+  lastName String
+  avatarUrl String?
+  googleId String? @unique
+  isEmailVerified Boolean @default(false)
+  status UserStatus @default(ACTIVE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  roles UserRole[]
+  employee Employee?
+  tasks Task[] @relation("Assignee")
+  createdTasks Task[] @relation("TaskCreator")
+  projects Project[] @relation("ProjectCreator")
+  messages Message[]
+  notifications Notification[]
+  refreshTokens RefreshToken[]
+  teamMemberships TeamMember[]
+  channelMemberships ChannelMember[]
+}
+model Role { id String @id @default(uuid()) name RoleName @unique description String? users UserRole[] permissions RolePermission[] }
+model Permission { id String @id @default(uuid()) key String @unique description String roles RolePermission[] }
+model UserRole { userId String roleId String user User @relation(fields:[userId],references:[id],onDelete:Cascade) role Role @relation(fields:[roleId],references:[id],onDelete:Cascade) @@id([userId,roleId]) }
+model RolePermission { roleId String permissionId String role Role @relation(fields:[roleId],references:[id],onDelete:Cascade) permission Permission @relation(fields:[permissionId],references:[id],onDelete:Cascade) @@id([roleId,permissionId]) }
+model Team { id String @id @default(uuid()) name String @unique description String? createdAt DateTime @default(now()) members TeamMember[] projects Project[] }
+model TeamMember { teamId String userId String teamRole String @default("MEMBER") team Team @relation(fields:[teamId],references:[id],onDelete:Cascade) user User @relation(fields:[userId],references:[id],onDelete:Cascade) @@id([teamId,userId]) }
+model Employee { id String @id @default(uuid()) userId String @unique jobTitle String department String managerId String? hireDate DateTime? user User @relation(fields:[userId],references:[id],onDelete:Cascade) }
+model Client { id String @id @default(uuid()) companyName String @unique primaryContactName String primaryContactEmail String phone String? status ClientStatus @default(PROSPECT) createdAt DateTime @default(now()) projects Project[] }
+model Project { id String @id @default(uuid()) name String description String? status ProjectStatus @default(PLANNING) priority Priority @default(MEDIUM) startDate DateTime? dueDate DateTime? teamId String? clientId String? createdById String createdAt DateTime @default(now()) updatedAt DateTime @updatedAt deletedAt DateTime? team Team? @relation(fields:[teamId],references:[id]) client Client? @relation(fields:[clientId],references:[id]) createdBy User @relation("ProjectCreator",fields:[createdById],references:[id]) tasks Task[] documents Document[] @@index([status]) @@index([teamId]) @@index([clientId]) @@index([dueDate]) }
+model Task { id String @id @default(uuid()) title String description String? status TaskStatus @default(TODO) priority Priority @default(MEDIUM) projectId String assigneeId String? createdById String dueDate DateTime? createdAt DateTime @default(now()) updatedAt DateTime @updatedAt project Project @relation(fields:[projectId],references:[id],onDelete:Cascade) assignee User? @relation("Assignee",fields:[assigneeId],references:[id]) createdBy User @relation("TaskCreator",fields:[createdById],references:[id]) @@index([projectId]) @@index([assigneeId]) @@index([status]) @@index([dueDate]) }
+model Channel { id String @id @default(uuid()) name String type ChannelType @default(PUBLIC) createdById String createdAt DateTime @default(now()) members ChannelMember[] messages Message[] }
+model ChannelMember { channelId String userId String channel Channel @relation(fields:[channelId],references:[id],onDelete:Cascade) user User @relation(fields:[userId],references:[id],onDelete:Cascade) @@id([channelId,userId]) }
+model Message { id String @id @default(uuid()) channelId String authorId String body String createdAt DateTime @default(now()) editedAt DateTime? deletedAt DateTime? channel Channel @relation(fields:[channelId],references:[id],onDelete:Cascade) author User @relation(fields:[authorId],references:[id]) @@index([channelId,createdAt]) }
+model Document { id String @id @default(uuid()) title String description String? category String currentFileUrl String? projectId String? uploadedById String createdAt DateTime @default(now()) updatedAt DateTime @updatedAt deletedAt DateTime? project Project? @relation(fields:[projectId],references:[id]) }
+model Meeting { id String @id @default(uuid()) title String description String? startTime DateTime endTime DateTime location String? organizerId String projectId String? createdAt DateTime @default(now()) }
+model Notification { id String @id @default(uuid()) userId String type String title String body String isRead Boolean @default(false) relatedEntityType String? relatedEntityId String? createdAt DateTime @default(now()) user User @relation(fields:[userId],references:[id],onDelete:Cascade) @@index([userId,isRead,createdAt]) }
+model RefreshToken { id String @id @default(uuid()) userId String tokenHash String @unique expiresAt DateTime revokedAt DateTime? createdByIp String? createdAt DateTime @default(now()) user User @relation(fields:[userId],references:[id],onDelete:Cascade) @@index([userId]) }
